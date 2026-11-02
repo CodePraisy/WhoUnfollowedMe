@@ -99,6 +99,11 @@ h1, h2, h3 { font-family: var(--display); margin: 0; font-weight: 600; letter-sp
 .theme-switch svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
 .titlebar-right { display: flex; align-items: center; height: 100%; }
 
+/* Mac: native traffic lights sit at the left of the title bar */
+[data-platform="darwin"] .win-controls { display: none; }
+[data-platform="darwin"] .titlebar { padding-left: 84px; }
+[data-platform="darwin"] .theme-switch { margin-right: 12px; }
+
 /* ---------- buttons ---------- */
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;

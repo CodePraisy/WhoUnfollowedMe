@@ -1,14 +1,16 @@
 {
   "name": "who-unfollowed-me",
   "productName": "WhoUnfollowedMe",
-  "version": "1.2.1",
-  "description": "See who doesn't follow you back on Instagram, track unfollowers over time.",
+  "version": "1.3.0",
+  "description": "See who doesn't follow you back on Instagram and track unfollowers over time.",
   "main": "main.js",
   "author": "Praise Onuoha",
   "license": "MIT",
   "scripts": {
     "start": "electron .",
-    "dist": "npx --yes electron-builder@26.18.0 --win"
+    "dist": "npx --yes electron-builder@26.18.0",
+    "dist:win": "npx --yes electron-builder@26.18.0 --win",
+    "dist:mac": "npx --yes electron-builder@26.18.0 --mac"
   },
   "devDependencies": {
     "electron": "^45.1.0"
@@ -53,6 +55,25 @@
     },
     "portable": {
       "artifactName": "WhoUnfollowedMe-Portable-${version}.exe"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon-mac.png",
+      "category": "public.app-category.social-networking",
+      "identity": "-",
+      "hardenedRuntime": false
+    },
+    "dmg": {
+      "artifactName": "WhoUnfollowedMe-${version}-mac-${arch}.dmg",
+      "title": "WhoUnfollowedMe ${version}"
     }
   },
   "repository": {

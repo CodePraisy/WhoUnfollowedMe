@@ -1,6 +1,8 @@
 // Runs before first paint so the window never flashes the wrong theme.
 (function () {
-  var pref = new URLSearchParams(location.search).get('theme') || 'system';
+  var params = new URLSearchParams(location.search);
+  var pref = params.get('theme') || 'system';
+  document.documentElement.dataset.platform = params.get('platform') || 'win32';
   var mq = window.matchMedia('(prefers-color-scheme: light)');
   function apply(p) {
     window.__themePref = p;
