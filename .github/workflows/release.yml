@@ -1,0 +1,32 @@
+name: Build Windows release
+
+# Push a tag like v1.2.0 to build the installer and portable exe on Windows
+# and attach them to a GitHub release with that name.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install
+        run: npm install --no-fund
+
+      - name: Build installer and portable exe
+        run: npx --yes electron-builder@26.18.0 --win --publish never
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.exe
+          generate_release_notes: true
