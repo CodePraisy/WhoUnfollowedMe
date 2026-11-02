@@ -1,0 +1,63 @@
+{
+  "name": "who-unfollowed-me",
+  "productName": "WhoUnfollowedMe",
+  "version": "1.2.0",
+  "description": "See who doesn't follow you back on Instagram, track unfollowers over time.",
+  "main": "main.js",
+  "author": "Praise Onuoha",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dist": "npx --yes electron-builder@26.18.0 --win"
+  },
+  "devDependencies": {
+    "electron": "^45.1.0"
+  },
+  "build": {
+    "appId": "com.codepraisy.whounfollowedme",
+    "productName": "WhoUnfollowedMe",
+    "copyright": "\u00a9 2026 Praise Onuoha",
+    "files": [
+      "main.js",
+      "preload.js",
+      "src/**/*",
+      "assets/**/*"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "WhoUnfollowedMe",
+      "artifactName": "WhoUnfollowedMe-Setup-${version}.exe"
+    },
+    "portable": {
+      "artifactName": "WhoUnfollowedMe-Portable-${version}.exe"
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/CodePraisy/WhoUnfollowedMe.git"
+  },
+  "homepage": "https://github.com/CodePraisy/WhoUnfollowedMe"
+}
