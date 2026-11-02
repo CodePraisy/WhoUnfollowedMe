@@ -1,0 +1,7 @@
+node_modules/
+dist/
+debug.log
+*.wumbackup
+package-lock.json.bak
+.DS_Store
+Thumbs.db
