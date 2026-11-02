@@ -185,6 +185,11 @@ h1, h2, h3 { font-family: var(--display); margin: 0; font-weight: 600; letter-sp
 .page-head p { margin: 10px 0 0; max-width: 72ch; }
 .row-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; }
 
+.notice { display: flex; gap: 16px; align-items: center; justify-content: space-between; padding: 14px 18px; margin-bottom: 22px; border-radius: var(--r-md); background: var(--plum); border: 1px solid var(--seam); }
+.notice p { margin: 0; color: var(--haze); max-width: 70ch; }
+.notice b { color: var(--bone); }
+.notice .btn { flex: none; }
+
 /* ---------- avatars ---------- */
 .av { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; flex: none; background: var(--plum-2); }
 .av.md { width: 48px; height: 48px; }

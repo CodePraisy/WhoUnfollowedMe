@@ -32,11 +32,14 @@ const ICON = {
 
 // ---------- state ----------
 const S = {
-  key: null, store: null, d: null, loggedIn: false, accounts: [],
+  key: null, store: null, d: null, loggedIn: false, sessionUser: null, accounts: [],
   view: 'overview', q: '', chips: new Set(), sort: 'default', showKept: false,
   skipConfirm: false, busy: new Set(),
 };
 const isImport = () => S.key === 'import';
+// Follow/unfollow only for the account you're logged in as (never on another account's saved scans).
+const canAct = () => !isImport() && S.loggedIn && !!S.sessionUser && S.key === S.sessionUser;
+const viewingOther = () => !isImport() && S.loggedIn && !!S.sessionUser && !!S.key && S.key !== S.sessionUser;
 const user = (id) => S.store.users[id] || { id, username: id, full_name: '' };
 
 const VIEWS = {
@@ -127,7 +130,7 @@ function renderMe() {
       <div><b>${fmt(snap ? snap.following.length : p.following)}</b><span>following</span></div>
     </div>`;
   $('#last-scan').textContent = snap ? `Last scan ${ago(snap.ts)}` : 'No scans yet';
-  $('#btn-scan').textContent = isImport() ? 'Scan with Instagram login' : 'Scan now';
+  $('#btn-scan').textContent = isImport() ? 'Scan with Instagram login' : viewingOther() ? 'Scan logged-in account' : 'Scan now';
 }
 
 function countFor(view) {
@@ -158,6 +161,21 @@ function go(view) {
 }
 
 function renderView() {
+  renderViewInner();
+  accountNotice();
+}
+
+// Explains what's going on when the open scans belong to a different account than the one logged in.
+function accountNotice() {
+  if (!viewingOther()) return;
+  const who = S.store.profile?.username ? '@' + esc(S.store.profile.username) : 'another account';
+  const n = document.createElement('div');
+  n.className = 'notice';
+  n.innerHTML = `<p>These are saved scans for <b>${who}</b>, but you're logged in to Instagram as a different account. Unfollow and Follow back are hidden here, and scanning updates the account you're logged in as, not this one.</p><button class="btn ghost" data-act="my-account">Go to my account</button>`;
+  $('#view').prepend(n);
+}
+
+function renderViewInner() {
   if (!S.d) {
     $('#view').innerHTML = `<div class="empty big"><h2>No scan yet</h2><p>You're logged in. Press Scan now to sort your followers.</p>
       <button class="btn primary" data-act="scan">Scan now</button></div>`;
@@ -472,7 +490,7 @@ function row(u, view) {
     acts.push(`<button class="act keep ${kept ? 'on' : ''}" data-act="keep" title="${kept ? 'Unstar: show in Don\'t follow back again' : 'Star: hide from Don\'t follow back'}" aria-pressed="${kept}">${ICON.keep}</button>`);
   }
   acts.push(`<button class="act" data-act="open" title="Open profile on instagram.com">${ICON.open}</button>`);
-  if (!isImport() && S.loggedIn) {
+  if (canAct()) {
     const busy = S.busy.has(u.id);
     if (d.ing.has(u.id) && ['notBack', 'unfollowers', 'following'].includes(view)) {
       acts.push(`<button class="act-text danger" data-act="unfollow" ${busy ? 'disabled' : ''}>${busy ? 'Unfollowing…' : 'Unfollow'}</button>`);
@@ -638,6 +656,7 @@ async function runScan() {
     const r = await bridge.login();
     if (!r.loggedIn || !r.userId) return backToStart('Login didn’t finish, so nothing changed. Try again when you’re ready.');
     S.loggedIn = true;
+    S.sessionUser = r.userId;
     S.key = r.userId;
     S.store = await bridge.load(r.userId);
     showShell();
@@ -669,6 +688,7 @@ async function runScan() {
 // Return to the welcome screen (used when a login fails or Instagram really logs you out).
 async function backToStart(message) {
   S.loggedIn = false;
+  S.sessionUser = null;
   S.key = null;
   S.store = null;
   S.d = null;
@@ -723,7 +743,7 @@ document.addEventListener('click', async (e) => {
 
   if (e.target.closest('#btn-login')) {
     const r = await bridge.login();
-    if (r.loggedIn && r.userId) { S.loggedIn = true; await openKey(r.userId); if (!S.store.snapshots.length) runScan(); }
+    if (r.loggedIn && r.userId) { S.loggedIn = true; S.sessionUser = r.userId; await openKey(r.userId); if (!S.store.snapshots.length) runScan(); }
     else await backToStart('Login didn’t finish, so nothing changed. Try again when you’re ready.');
     return;
   }
@@ -743,6 +763,7 @@ document.addEventListener('click', async (e) => {
     if (!ok) return;
     await bridge.logout();
     S.loggedIn = false;
+    S.sessionUser = null;
     S.accounts = (await bridge.status()).accounts;
     return showWelcome();
   }
@@ -768,6 +789,7 @@ document.addEventListener('click', async (e) => {
   const id = act.closest('.row')?.dataset.id;
   switch (act.dataset.act) {
     case 'scan': return runScan();
+    case 'my-account': return openKey(S.sessionUser);
     case 'export': return exportCsv();
     case 'toggle-kept': S.showKept = !S.showKept; return renderListView(S.view);
     case 'keep': return toggleKeep(id);
@@ -825,6 +847,7 @@ window.addEventListener('unhandledrejection', (e) => bootFailed(e.reason));
 (async function boot() {
   const st = await bridge.status();
   S.loggedIn = st.loggedIn;
+  S.sessionUser = st.loggedIn ? st.userId : null;
   S.accounts = st.accounts;
   if (st.loggedIn && st.userId) {
     await openKey(st.userId); // opens on your last results, or the "No scan yet" screen; never starts a scan by itself

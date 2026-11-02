@@ -868,6 +868,10 @@ ipcMain.handle('ig:cancel', () => { cancelScan = true; });
 
 ipcMain.handle('ig:friendship', async (_e, key, userId, kind) => {
   if (!['create', 'destroy'].includes(kind)) return { ok: false, message: 'Unknown action.' };
+  // Only act for the account that's logged in; never use another account's saved list.
+  if (String(key) !== String(await getCookie('ds_user_id'))) {
+    return { ok: false, code: 'WRONG_ACCOUNT', message: 'These scans belong to a different account than the one logged in.' };
+  }
   try {
     const username = loadStore(key).users?.[userId]?.username || '';
     const status = await friendshipAction(kind, userId, username);
