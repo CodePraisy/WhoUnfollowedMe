@@ -775,7 +775,12 @@ document.addEventListener('click', async (e) => {
     case 'unfollow': return friendship(id, 'destroy');
     case 'follow': return friendship(id, 'create');
     case 'clear-history': {
-      const ok = await confirmBox({ title: 'Clear older scans?', body: 'Keeps only your latest scan. Unfollower history from earlier scans is deleted.', ok: 'Clear older scans' });
+      const older = S.store.snapshots.length - 1;
+      const ok = await confirmBox({
+        title: `Delete ${plural(older, 'older scan', 'older scans')}?`,
+        body: `Only your latest scan is kept, so the record of who unfollowed you before it is lost. This can't be undone. To keep a copy, choose Back up scans first.`,
+        ok: `Delete ${plural(older, 'scan', 'scans')}`,
+      });
       if (!ok) return;
       S.store = await bridge.clearHistory(S.key);
       renderAll();

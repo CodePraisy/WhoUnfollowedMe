@@ -1,7 +1,7 @@
 {
   "name": "who-unfollowed-me",
   "productName": "WhoUnfollowedMe",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "See who doesn't follow you back on Instagram, track unfollowers over time.",
   "main": "main.js",
   "author": "Praise Onuoha",
