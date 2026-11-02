@@ -1,10 +1,13 @@
 name: Build Windows release
 
-# Push a tag like v1.2.0 to build the installer and portable exe on Windows
-# and attach them to a GitHub release with that name.
+# Builds the installer and portable exe on Windows and publishes them as a
+# GitHub release named after the version in package.json (e.g. v1.2.0).
+# Runs when main changes; skips if that version was already released.
+# Bump "version" in package.json to ship a new release.
 on:
   push:
-    tags: ['v*']
+    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -15,18 +18,38 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Read version and check for an existing release
+        id: ver
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v="v$(node -p "require('./package.json').version")"
+          echo "tag=$v" >> "$GITHUB_OUTPUT"
+          if gh release view "$v" >/dev/null 2>&1; then
+            echo "Release $v already exists; skipping build."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: actions/setup-node@v4
+        if: steps.ver.outputs.skip != 'true'
         with:
           node-version: 22
 
       - name: Install
+        if: steps.ver.outputs.skip != 'true'
         run: npm install --no-fund
 
       - name: Build installer and portable exe
+        if: steps.ver.outputs.skip != 'true'
         run: npx --yes electron-builder@26.18.0 --win --publish never
 
       - name: Publish release
+        if: steps.ver.outputs.skip != 'true'
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.ver.outputs.tag }}
+          name: WhoUnfollowedMe ${{ steps.ver.outputs.tag }}
+          target_commitish: ${{ github.sha }}
           files: dist/*.exe
           generate_release_notes: true
