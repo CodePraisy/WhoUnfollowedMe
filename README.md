@@ -1,18 +1,34 @@
 # WhoUnfollowedMe
 
-A Windows desktop app that shows who doesn't follow you back on Instagram and tracks who unfollows you over time.
+A desktop app for Windows and Mac that shows who doesn't follow you back on Instagram and tracks who unfollows you over time.
 
 ## Download
 
-Get the latest build from the [Releases page](https://github.com/CodePraisy/WhoUnfollowedMe/releases): `WhoUnfollowedMe-Setup-x.y.z.exe` installs it with a Start menu and desktop shortcut; `WhoUnfollowedMe-Portable-x.y.z.exe` runs without installing. Windows 10/11, 64-bit. The builds aren't code-signed, so Windows SmartScreen may warn the first time: choose **More info → Run anyway**.
+Get the latest build from the [Releases page](https://github.com/CodePraisy/WhoUnfollowedMe/releases).
+
+**Windows 10/11 (64-bit)**
+- `WhoUnfollowedMe-Setup-x.y.z.exe` installs it with Start menu and desktop shortcuts.
+- `WhoUnfollowedMe-Portable-x.y.z.exe` runs without installing.
+
+The builds aren't code-signed, so Windows SmartScreen may warn the first time: choose **More info → Run anyway**.
+
+**Mac (macOS 11 or newer)**
+- Apple Silicon (M1 and later): `WhoUnfollowedMe-x.y.z-mac-arm64.dmg`
+- Intel: `WhoUnfollowedMe-x.y.z-mac-x64.dmg`
+
+Open the .dmg and drag WhoUnfollowedMe into Applications. The app isn't notarized by Apple, so the first time macOS will say it can't verify the developer. Open **System Settings → Privacy & Security**, scroll down, and click **Open Anyway** next to WhoUnfollowedMe (you only do this once).
 
 ## Run from source
 
-1. Install Node.js LTS from https://nodejs.org.
-2. Double-click `start.bat`. The first run installs Electron, then the app opens.
-   (Or in a terminal: `npm install` then `npm start`.)
+1. Install Node.js 22 or newer from https://nodejs.org.
+2. Windows: double-click `start.bat`. Mac or Windows terminal: `npm install`, then `npm start`.
 
-The only dependency is Electron, and `npm install` reports 0 vulnerabilities. To build the installer and portable `.exe` yourself, run `npm run dist` on Windows; they land in `dist/`.
+The only dependency is Electron, and `npm install` reports 0 vulnerabilities.
+
+## Build it yourself
+
+- `npm run dist` builds for the computer you're on (Windows: installer + portable exe; Mac: .dmg files). Output lands in `dist/`.
+- Or let GitHub build both: bump `"version"` in `package.json` and push to `main`. The workflow builds Windows and Mac and publishes one release with all the files, in about 10 minutes.
 
 ## How it works
 
@@ -36,7 +52,7 @@ Scans are paced like a person scrolling: 1–2.5 s between pages and a longer pa
 
 ## Where data lives
 
-Everything stays on your computer in `%APPDATA%\WhoUnfollowedMe\` (the **Data folder** button opens it):
+Everything stays on your computer, in `%APPDATA%\WhoUnfollowedMe\` on Windows or `~/Library/Application Support/WhoUnfollowedMe/` on Mac (the **Data folder** button opens it):
 
 - `accounts\` – your scans, one file per Instagram account
 - `avatars\` – cached profile pictures

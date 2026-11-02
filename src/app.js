@@ -404,7 +404,7 @@ function renderListView(view) {
       <p class="muted">${esc(LIST_COPY[view](d))}</p>
     </div>
     <div class="toolbar">
-      <label class="search">${ICON.search}<input id="q" type="search" placeholder="Search by name or username" value="${esc(S.q)}" spellcheck="false"><kbd>Ctrl K</kbd></label>
+      <label class="search">${ICON.search}<input id="q" type="search" placeholder="Search by name or username" value="${esc(S.q)}" spellcheck="false"><kbd>${document.documentElement.dataset.platform === 'darwin' ? '⌘K' : 'Ctrl K'}</kbd></label>
       <div class="chips">
         ${chips.map(([k, l]) => `<button class="chip ${S.chips.has(k) ? 'on' : ''}" data-chip="${k}">${l}</button>`).join('')}
         ${view === 'notBack' && d.keptCount ? `<button class="chip ${S.showKept ? 'on' : ''}" data-act="toggle-kept">Show ${fmt(d.keptCount)} starred</button>` : ''}

@@ -13,6 +13,7 @@ const zlib = require('zlib');
 protocol.registerSchemesAsPrivileged([{ scheme: 'igimg', privileges: { standard: true, secure: true } }]);
 
 const PARTITION = 'persist:instagram';
+const IS_MAC = process.platform === 'darwin';
 const IG = 'https://www.instagram.com';
 const APP_ID = '936619743392459'; // instagram.com web client id
 const MAX_SNAPSHOTS = 60;
@@ -607,11 +608,13 @@ function createWindow() {
   nativeTheme.themeSource = theme;
   win = new BrowserWindow({
     width: 1320, height: 860, minWidth: 1000, minHeight: 660,
-    frame: false, backgroundColor: bgFor(), show: false, icon: iconPath(),
+    // Windows: our own title bar and buttons. Mac: native traffic lights over our title bar.
+    ...(IS_MAC ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 14, y: 13 } } : { frame: false }),
+    backgroundColor: bgFor(), show: false, icon: iconPath(),
     title: 'WhoUnfollowedMe',
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, spellcheck: false },
   });
-  win.loadFile(path.join(__dirname, 'src', 'index.html'), { query: { theme } });
+  win.loadFile(path.join(__dirname, 'src', 'index.html'), { query: { theme, platform: process.platform } });
   win.once('ready-to-show', () => win.show());
   win.on('maximize', () => send('win:state', { maximized: true }));
   win.on('unmaximize', () => send('win:state', { maximized: false }));
@@ -656,7 +659,8 @@ app.on('second-instance', () => {
 app.whenReady().then(() => {
   if (!gotLock) return;
   log(`app started (Electron ${process.versions.electron})`);
-  Menu.setApplicationMenu(null);
+  // Mac needs a menu bar for copy/paste/quit to work (including in the Instagram login window).
+  Menu.setApplicationMenu(IS_MAC ? Menu.buildFromTemplate([{ role: 'appMenu' }, { role: 'editMenu' }, { role: 'windowMenu' }]) : null);
   // Look like regular Chrome to instagram.com
   const ua = app.userAgentFallback.replace(/\s?(Electron|who-unfollowed-me|WhoUnfollowedMe)\/\S+/g, '');
   igSession().setUserAgent(ua);
