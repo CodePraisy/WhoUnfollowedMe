@@ -26,6 +26,7 @@ const ICON = {
   plus: '<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="4"/><path d="M2 20c0-3.3 3.1-6 7-6s7 2.7 7 6M19 8v6M16 11h6"/></svg>',
   search: '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>',
   download: '<svg viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>',
+  trash: '<svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>',
   lock: '<svg viewBox="0 0 24 24" class="i-lock"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>',
   check: '<svg viewBox="0 0 24 24" class="i-verified"><path d="M12 2l2.4 1.8 3-.2.9 2.9 2.5 1.7-1 2.8 1 2.8-2.5 1.7-.9 2.9-3-.2L12 22l-2.4-1.8-3 .2-.9-2.9-2.5-1.7 1-2.8-1-2.8 2.5-1.7.9-2.9 3 .2z"/><path class="tick" d="M8.5 12.2l2.3 2.3 4.7-4.8"/></svg>',
 };
@@ -35,6 +36,7 @@ const S = {
   key: null, store: null, d: null, loggedIn: false, sessionUser: null, accounts: [],
   view: 'overview', q: '', chips: new Set(), sort: 'default', showKept: false,
   skipConfirm: false, busy: new Set(),
+  sel: new Set(), lastSel: null, settings: null, usage: null, bulkStop: false, appInfo: null,
 };
 const isImport = () => S.key === 'import';
 // Follow/unfollow only for the account you're logged in as (never on another account's saved scans).
@@ -52,6 +54,7 @@ const VIEWS = {
   followers: { label: 'Followers', group: 'Lists' },
   following: { label: 'Following', group: 'Lists' },
   history: { label: 'Scan history', group: 'Lists' },
+  settings: { label: 'Settings', group: 'App' },
 };
 
 function derive() {
@@ -131,6 +134,7 @@ function renderMe() {
     </div>`;
   $('#last-scan').textContent = snap ? `Last scan ${ago(snap.ts)}` : 'No scans yet';
   $('#btn-scan').textContent = isImport() ? 'Scan with Instagram login' : viewingOther() ? 'Scan logged-in account' : 'Scan now';
+  renderUsage();
 }
 
 function countFor(view) {
@@ -154,7 +158,7 @@ function renderNav() {
 }
 
 function go(view) {
-  S.view = view; S.q = ''; S.chips.clear(); S.sort = 'default';
+  S.view = view; S.q = ''; S.chips.clear(); S.sort = 'default'; S.sel.clear(); S.lastSel = null;
   renderNav();
   renderView();
   $('.content').scrollTop = 0;
@@ -176,6 +180,7 @@ function accountNotice() {
 }
 
 function renderViewInner() {
+  if (S.view === 'settings') return renderSettings();
   if (!S.d) {
     $('#view').innerHTML = `<div class="empty big"><h2>No scan yet</h2><p>You're logged in. Press Scan now to sort your followers.</p>
       <button class="btn primary" data-act="scan">Scan now</button></div>`;
@@ -354,7 +359,8 @@ function renderHistory() {
       lost = prev.followers.filter((id) => !b.has(id)).length;
     }
     return `<tr><td>${esc(dtFmt.format(s.ts))}</td><td>${fmt(s.followers.length)}</td><td>${fmt(s.following.length)}</td>
-      <td class="mint">${gained === '—' || gained === 0 ? gained : '+' + fmt(gained)}</td><td class="coral">${lost === '—' || lost === 0 ? lost : '−' + fmt(lost)}</td></tr>`;
+      <td class="mint">${gained === '—' || gained === 0 ? gained : '+' + fmt(gained)}</td><td class="coral">${lost === '—' || lost === 0 ? lost : '−' + fmt(lost)}</td>
+      <td class="del"><button class="act" data-act="del-scan" data-ts="${s.ts}" title="Delete this scan" aria-label="Delete the scan from ${esc(dtFmt.format(s.ts))}">${ICON.trash}</button></td></tr>`;
   }).reverse().join('');
   $('#view').innerHTML = `
     <div class="page-head row-head">
@@ -367,7 +373,7 @@ function renderHistory() {
     { name: 'Followers', cls: 'lilac', pts: snaps.map((s) => ({ t: s.ts, v: s.followers.length })) },
     { name: 'Following', cls: 'haze', pts: snaps.map((s) => ({ t: s.ts, v: s.following.length })) },
   ], 900, 260)}</section>` : ''}
-    <table class="hist"><thead><tr><th>Scanned</th><th>Followers</th><th>Following</th><th>Gained</th><th>Lost</th></tr></thead><tbody>${rows}</tbody></table>`;
+    <table class="hist"><thead><tr><th>Scanned</th><th>Followers</th><th>Following</th><th>Gained</th><th>Lost</th><th><span class="sr">Delete</span></th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 // ---------- list views ----------
@@ -434,8 +440,12 @@ function renderListView(view) {
       </select>
       <button class="btn ghost icon-btn" data-act="export" title="Export this list as CSV">${ICON.download}<span>Export</span></button>
     </div>
-    <p class="result-count" id="result-count"></p>
-    <div class="list" id="list"></div>`;
+    <div class="list-head">
+      ${canSelect(view) ? '<label class="sel-all"><input type="checkbox" id="sel-all"><span id="sel-all-label">Select all</span></label>' : ''}
+      <p class="result-count" id="result-count"></p>
+    </div>
+    <div class="list" id="list"></div>
+    <div class="bulkbar" id="bulkbar" hidden></div>`;
   $('#sort').value = S.sort;
   renderRows(view);
 }
@@ -448,6 +458,7 @@ function renderRows(view) {
   $('#result-count').textContent = list.length === total ? plural(total, 'account', 'accounts') : `${fmt(list.length)} of ${fmt(total)} accounts`;
   if (rowObserver) rowObserver.disconnect();
   if (!list.length) {
+    updateBulkBar();
     const [h, p] = S.q || S.chips.size ? ['No accounts match your search.', 'Try a different name or clear the filters.'] : EMPTY[view];
     el.innerHTML = `<div class="empty"><h2>${esc(h)}</h2>${p ? `<p>${esc(p)}</p>` : ''}</div>`;
     return;
@@ -471,6 +482,7 @@ function renderRows(view) {
     }
   };
   more();
+  updateBulkBar();
 }
 
 function row(u, view) {
@@ -498,7 +510,10 @@ function row(u, view) {
       acts.push(`<button class="act-text" data-act="follow" ${busy ? 'disabled' : ''}>${busy ? 'Following…' : 'Follow back'}</button>`);
     }
   }
-  return `<div class="row" data-id="${esc(u.id)}">
+  const selectable = canSelect(view);
+  const picked = S.sel.has(u.id);
+  return `<div class="row${selectable ? ' selectable' : ''}${picked ? ' selected' : ''}" data-id="${esc(u.id)}">
+    ${selectable ? `<input type="checkbox" class="sel" data-sel aria-label="Select @${esc(u.username)}" ${picked ? 'checked' : ''}>` : ''}
     ${avatar(u)}
     <div class="who">
       <b>${esc(u.full_name || u.username)}${u.verified ? ICON.check : ''}</b>
@@ -529,18 +544,24 @@ function toast(msg, type = 'info') {
   setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 300); }, type === 'error' ? 7000 : 4000);
 }
 
-function confirmBox({ title, body, ok, skippable = false }) {
+function confirmBox({ title, body, ok, skippable = false, tone = 'danger', ack = '' }) {
   if (skippable && S.skipConfirm) return Promise.resolve(true);
   return new Promise((resolve) => {
     $('#modal-title').textContent = title;
     $('#modal-body').textContent = body;
     $('#modal-ok').textContent = ok;
+    $('#modal-ok').className = `btn ${tone}`;
     $('#modal-skip').checked = false;
-    show($('.check'), skippable);
+    // "ack" = a checkbox the person must tick before the button works (used for risky settings)
+    $('#modal-skip-label').textContent = ack || "Don't ask again this session";
+    $('#modal-ok').disabled = !!ack;
+    $('#modal-skip').onchange = () => { if (ack) $('#modal-ok').disabled = !$('#modal-skip').checked; };
+    show($('.check'), skippable || !!ack);
     show($('#modal'), true);
     $('#modal-ok').focus();
     const done = (v) => {
-      if (v && skippable && $('#modal-skip').checked) S.skipConfirm = true;
+      if (v && skippable && !ack && $('#modal-skip').checked) S.skipConfirm = true;
+      $('#modal-skip').onchange = null;
       show($('#modal'), false);
       $('#modal-ok').onclick = $('#modal-cancel').onclick = null;
       document.removeEventListener('keydown', onKey);
@@ -555,7 +576,7 @@ function confirmBox({ title, body, ok, skippable = false }) {
 
 async function friendship(id, kind) {
   const u = user(id);
-  if (kind === 'destroy') {
+  if (kind === 'destroy' && S.settings?.confirmUnfollow !== false) {
     const ok = await confirmBox({
       title: `Unfollow @${u.username}?`,
       body: 'Instagram limits how many accounts you can unfollow in a short time, so the app waits a few seconds between unfollows.',
@@ -567,6 +588,7 @@ async function friendship(id, kind) {
   refreshRow(id);
   const r = await bridge.friendship(S.key, id, kind);
   S.busy.delete(id);
+  refreshUsage();
   if (!r.ok) {
     refreshRow(id);
     toast(r.message || 'That didn\'t work. Try again in a minute.', 'error');
@@ -666,6 +688,7 @@ async function runScan() {
   const r = await bridge.scan();
   clearInterval(waitTimer);
   show($('#scan'), false);
+  refreshUsage();
   if (r.ok) {
     S.key = r.store.key;
     S.store = r.store;
@@ -682,6 +705,299 @@ async function runScan() {
   } else {
     toast(r.message, 'error');
   }
+}
+
+// ---------- usage meters ----------
+// Ring colour: green under half the limit, yellow from half, red from 80%.
+function ringTone(ratio) { return ratio >= 0.8 ? 'red' : ratio >= 0.5 ? 'yellow' : 'green'; }
+function ring(value, limit, size = 46) {
+  const r = size / 2 - 5;
+  const c = 2 * Math.PI * r;
+  const ratio = limit > 0 ? Math.min(1, value / limit) : 0;
+  return `<svg class="ring ${ringTone(ratio)}" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}" aria-hidden="true">
+    <circle class="ring-track" cx="${size / 2}" cy="${size / 2}" r="${r}"/>
+    <circle class="ring-bar" cx="${size / 2}" cy="${size / 2}" r="${r}" stroke-dasharray="${c.toFixed(2)}" stroke-dashoffset="${(c * (1 - ratio)).toFixed(2)}"/>
+    <text x="50%" y="50%" dominant-baseline="central" text-anchor="middle">${fmt(value)}</text>
+  </svg>`;
+}
+const untilText = (ts) => {
+  if (!ts) return '';
+  const m = Math.max(1, Math.round((ts - Date.now()) / 60000));
+  return m < 60 ? `in ${m} min` : `in ${Math.round(m / 60)} h`;
+};
+
+async function refreshUsage() {
+  try { S.usage = await bridge.usage(); S.settings = S.usage.settings; } catch { /* keep the last values */ }
+  renderUsage();
+  if (S.view === 'settings' && !$('#shell').hidden) renderSettingsUsage();
+}
+
+function renderUsage() {
+  const el = $('#usage');
+  if (!el) return;
+  const u = S.usage;
+  if (!u || !S.loggedIn || !u.account) { el.hidden = true; return; }
+  const cfg = u.settings;
+  el.hidden = false;
+  el.innerHTML = `
+    <button class="usage-item" data-act="open-settings" title="Scans started in the last 24 hours: ${fmt(u.scansDay)} of ${fmt(cfg.scansPerDay)}. Click for limits and settings.">
+      ${ring(u.scansDay, cfg.scansPerDay, 38)}
+      <span><b>Scans</b><small>${fmt(u.scansDay)} / ${fmt(cfg.scansPerDay)}</small></span>
+    </button>
+    <button class="usage-item" data-act="open-settings" title="Unfollows and follow-backs in the last 24 hours: ${fmt(u.changesDay)} of ${fmt(cfg.changesPerDay)}. Click for limits and settings.">
+      ${ring(u.changesDay, cfg.changesPerDay, 38)}
+      <span><b>Unfollows</b><small>${fmt(u.changesDay)} / ${fmt(cfg.changesPerDay)}</small></span>
+    </button>
+    ${cfg.override ? '<p class="override-flag">Override is on: limits aren’t enforced</p>' : ''}`;
+}
+
+// Room left before the follow-change limits stop you (Infinity when Override is on).
+function changesLeft() {
+  const u = S.usage; const cfg = S.settings;
+  if (!u || !cfg || cfg.override) return Infinity;
+  return Math.max(0, Math.min(cfg.changesPerDay - u.changesDay, cfg.changesPerHour - u.changesHour));
+}
+
+// ---------- selection & mass actions ----------
+const SELECTABLE = ['notBack', 'unfollowers', 'newFollowers', 'fans', 'mutuals', 'followers', 'following'];
+const canSelect = (view) => canAct() && SELECTABLE.includes(view);
+
+function setSelected(id, on) {
+  if (on) S.sel.add(id); else S.sel.delete(id);
+  const row = document.querySelector(`.row[data-id="${CSS.escape(id)}"]`);
+  if (row) { row.classList.toggle('selected', on); const cb = row.querySelector('[data-sel]'); if (cb) cb.checked = on; }
+}
+
+function updateBulkBar() {
+  const bar = $('#bulkbar');
+  const all = $('#sel-all');
+  if (!bar) return;
+  const visible = filtered(S.view).map((u) => u.id);
+  if (all) {
+    const n = visible.filter((id) => S.sel.has(id)).length;
+    all.checked = n > 0 && n === visible.length;
+    all.indeterminate = n > 0 && n < visible.length;
+    $('#sel-all-label').textContent = 'Select all';
+  }
+  if (!S.sel.size) { bar.hidden = true; return; }
+  const d = S.d;
+  const ids = [...S.sel];
+  const unf = ids.filter((id) => d.ing.has(id)).length;
+  const fol = ids.length - unf;
+  const starrable = ['notBack', 'following'].includes(S.view);
+  bar.hidden = false;
+  bar.innerHTML = `
+    <b>${plural(ids.length, 'account', 'accounts')} selected</b>
+    <div class="bulk-actions">
+      ${unf ? `<button class="btn danger" data-act="bulk-unfollow">Unfollow ${fmt(unf)}</button>` : ''}
+      ${fol ? `<button class="btn primary" data-act="bulk-follow">Follow ${fmt(fol)}</button>` : ''}
+      ${starrable ? '<button class="btn ghost" data-act="bulk-star">Star</button>' : ''}
+      <button class="btn ghost" data-act="bulk-clear">Clear selection</button>
+    </div>`;
+}
+
+function setBulkOverlay({ title, done, total, current, note, finished }) {
+  $('#bulk-title').textContent = title;
+  $('#bulk-count').textContent = `${fmt(done)} / ${fmt(total)}`;
+  const pct = total ? Math.floor((done / total) * 100) : 0;
+  $('#bulk-pct').textContent = `${pct}%`;
+  $('#bulk-fill').style.width = `${pct}%`;
+  $('#bulk-track').setAttribute('aria-valuenow', String(pct));
+  $('#bulk-current').textContent = current || '';
+  $('#bulk-sub').textContent = note || '';
+  $('#bulk-stop').hidden = !!finished;
+  $('#bulk-done').hidden = !finished;
+}
+
+async function bulkRun(kind) {
+  const d = S.d;
+  const unfollow = kind === 'destroy';
+  const ids = [...S.sel].filter((id) => (unfollow ? d.ing.has(id) : !d.ing.has(id)));
+  if (!ids.length) return;
+  await refreshUsage();
+  const left = changesLeft();
+  const cfg = S.settings;
+  if (left <= 0) {
+    return toast(`You've reached your follow-change limit. Wait for it to reset${S.usage.hourResetAt ? ` (${untilText(S.usage.hourResetAt)})` : ''}, or change the limits in Settings.`, 'error');
+  }
+  const todo = ids.slice(0, Number.isFinite(left) ? left : ids.length);
+  const each = cfg.actionDelaySec + (unfollow ? 2 : 5); // waiting + Instagram's own time per account
+  const mins = Math.max(1, Math.round((todo.length * each) / 60));
+  const verb = unfollow ? 'Unfollow' : 'Follow';
+  const capped = todo.length < ids.length
+    ? ` You only have ${fmt(left)} follow changes left in your limits, so the first ${fmt(todo.length)} will be done. Turn on Override in Settings to go past the limit.`
+    : '';
+  const ok = await confirmBox({
+    title: `${verb} ${plural(todo.length, 'account', 'accounts')}?`,
+    body: `This takes about ${plural(mins, 'minute', 'minutes')}, one account every ${each}–${each + 2} seconds, so Instagram doesn't flag your account. You can stop at any time.${capped}`,
+    ok: `${verb} ${fmt(todo.length)}`,
+    tone: unfollow ? 'danger' : 'primary',
+  });
+  if (!ok) return;
+
+  S.bulkStop = false;
+  const title = unfollow ? 'Unfollowing' : 'Following';
+  const failed = [];
+  let done = 0;
+  let requested = 0;
+  let stopReason = '';
+  show($('#bulk'), true);
+  for (const id of todo) {
+    if (S.bulkStop) { stopReason = 'Stopped.'; break; }
+    const u = user(id);
+    setBulkOverlay({ title, done, total: todo.length, current: `@${u.username}`, note: done ? 'Waiting a few seconds between accounts…' : 'Starting…' });
+    const r = await bridge.friendship(S.key, id, kind);
+    if (r.ok) {
+      done++;
+      if (r.requested) requested++;
+      S.store = r.store;
+      S.d = derive();
+      setSelected(id, false);
+      if (idsFor(S.view).includes(id)) refreshRow(id); else removeRow(id);
+    } else {
+      failed.push(`@${u.username}`);
+      if (['LIMIT', 'RATE', 'AUTH', 'CHECKPOINT', 'WRONG_ACCOUNT'].includes(r.code)) { stopReason = r.message; break; }
+    }
+    refreshUsage();
+  }
+  renderNav(); renderMe(); updateBulkBar();
+  const past = unfollow ? 'Unfollowed' : 'Followed';
+  const parts = [`${past} ${fmt(done)} of ${fmt(todo.length)}.`];
+  if (requested) parts.push(`${fmt(requested)} of those are private, so a follow request was sent.`);
+  if (failed.length) parts.push(`Didn't work for ${failed.slice(0, 5).join(', ')}${failed.length > 5 ? ` and ${failed.length - 5} more` : ''}.`);
+  if (stopReason) parts.push(stopReason);
+  setBulkOverlay({ title: S.bulkStop ? `${title} stopped` : `${title} finished`, done, total: todo.length, current: '', note: parts.join(' '), finished: true });
+}
+
+async function bulkStar() {
+  const ids = [...S.sel];
+  for (const id of ids) S.store.whitelist = await bridge.setKept(S.key, id, true);
+  S.d = derive();
+  ids.forEach((id) => setSelected(id, false));
+  renderNav();
+  renderRows(S.view);
+  toast(`Starred ${plural(ids.length, 'account', 'accounts')}.`, 'success');
+}
+
+// ---------- settings ----------
+function settingRow(label, help, control) {
+  return `<div class="set-row"><div class="set-text"><b>${label}</b>${help ? `<span>${help}</span>` : ''}</div><div class="set-control">${control}</div></div>`;
+}
+const numInput = (key, min, max, suffix) => `<label class="num"><input type="number" data-setting="${key}" min="${min}" max="${max}" value="${S.settings[key]}"><span>${suffix}</span></label>`;
+const toggle = (key, on, label) => `<button class="switch" role="switch" aria-checked="${on}" aria-label="${label}" data-toggle="${key}"><span></span></button>`;
+
+function renderSettingsUsage() {
+  const el = $('#settings-usage');
+  if (!el) return;
+  const u = S.usage;
+  if (!u || !u.account) { el.innerHTML = '<p class="muted">Log in to Instagram to see how much of your limits you’ve used.</p>'; return; }
+  const cfg = S.settings;
+  const card = (value, limit, title, reset) => `<div class="meter">${ring(value, limit, 72)}<div><b>${title}</b><span>${fmt(value)} of ${fmt(limit)}</span>${value && reset ? `<small>Oldest one drops off ${untilText(reset)}</small>` : ''}</div></div>`;
+  el.innerHTML = `
+    ${card(u.scansDay, cfg.scansPerDay, 'Scans in the last 24 hours', u.scansResetAt)}
+    ${card(u.changesDay, cfg.changesPerDay, 'Unfollows & follows, 24 hours', u.changesResetAt)}
+    ${card(u.changesHour, cfg.changesPerHour, 'Unfollows & follows, last hour', u.hourResetAt)}`;
+}
+
+async function renderSettings() {
+  const cfg = S.settings || await bridge.getSettings();
+  S.settings = cfg;
+  const info = S.appInfo || (S.appInfo = await bridge.appInfo());
+  const p = S.store?.profile || {};
+  const who = p.username ? `@${esc(p.username)}` : 'this account';
+  const scans = S.store?.snapshots.length || 0;
+  const keepOpts = [10, 20, 30, 60, 100, 200].map((n) => `<option value="${n}" ${cfg.keepScans === n ? 'selected' : ''}>${n} scans</option>`).join('');
+  $('#view').innerHTML = `
+    <div class="page-head"><h1>Settings</h1><p class="muted">Changes save as you make them.</p></div>
+
+    <section class="set-sec">
+      <h2>Usage and limits</h2>
+      <p class="muted set-intro">Instagram doesn't publish its limits, and accounts that scan or unfollow too much get temporarily blocked. These limits keep you well under that. Rings turn yellow at half and red near the limit.</p>
+      <div class="meters" id="settings-usage"></div>
+      ${settingRow('Scans per day', 'Counts every scan you start, for the logged-in account.', numInput('scansPerDay', 1, 50, 'per day'))}
+      ${settingRow('Unfollows and follows per hour', 'Single and mass actions both count.', numInput('changesPerHour', 1, 200, 'per hour'))}
+      ${settingRow('Unfollows and follows per day', '', numInput('changesPerDay', 1, 1000, 'per day'))}
+      ${settingRow('Seconds between each one', 'A little randomness is added so it looks like a person. The minimum is 5.', numInput('actionDelaySec', 5, 120, 'seconds'))}
+      ${settingRow('Override', cfg.override
+    ? '<span class="coral">On. Limits aren’t enforced. Instagram may restrict or ban your account if you scan or unfollow too much.</span>'
+    : 'Lets you go past the limits above. Not recommended.', toggle('override', cfg.override, 'Override limits'))}
+    </section>
+
+    <section class="set-sec">
+      <h2>Unfollowing</h2>
+      ${settingRow('Ask before each unfollow', 'Mass unfollows always ask once before starting.', toggle('confirmUnfollow', cfg.confirmUnfollow, 'Ask before each unfollow'))}
+    </section>
+
+    <section class="set-sec">
+      <h2>Appearance</h2>
+      ${settingRow('Theme', '', `<div class="seg" role="group" aria-label="Theme">${['system', 'light', 'dark'].map((t) => `<button data-theme-pick="${t}" aria-pressed="${window.__themePref === t}">${{ system: 'Match system', light: 'Light', dark: 'Dark' }[t]}</button>`).join('')}</div>`)}
+    </section>
+
+    <section class="set-sec">
+      <h2>Scan history</h2>
+      ${settingRow('Scans to keep for each account', 'When there are more, the oldest are deleted after each new scan.', `<select data-setting="keepScans">${keepOpts}</select>`)}
+      ${S.store ? settingRow(`Saved scans for ${who}`, plural(scans, 'scan', 'scans') + ' on this computer.', `<div class="btn-row"><button class="btn ghost" data-view="history">Open scan history</button><button class="btn ghost danger-text" data-act="delete-account">Delete all</button></div>`) : ''}
+    </section>
+
+    <section class="set-sec">
+      <h2>Data</h2>
+      ${settingRow('Back up scans', 'One file with every account’s scans, starred accounts and pictures. Your login isn’t included.', '<button id="btn-backup" class="btn ghost">Back up</button>')}
+      ${settingRow('Restore a backup', 'Merges with what’s here; scans are never duplicated.', '<button id="btn-restore" class="btn ghost">Restore</button>')}
+      ${settingRow('Import an Instagram data download', 'Works without logging in.', '<button id="btn-import2" class="btn ghost">Import</button>')}
+      ${settingRow('Data folder', 'Where scans, pictures and settings are saved.', '<button id="btn-folder" class="btn ghost">Open folder</button>')}
+      ${settingRow('Saved profile pictures', 'They download again the next time you see them.', '<button class="btn ghost" data-act="clear-pictures">Clear</button>')}
+    </section>
+
+    <section class="set-sec">
+      <h2>Account</h2>
+      ${S.loggedIn
+    ? settingRow('Instagram', 'You’re logged in. Your saved scans stay if you log out.', '<button id="btn-logout" class="btn ghost">Log out</button>')
+    : settingRow('Instagram', 'Not logged in.', '<button class="btn primary" data-act="scan">Log in and scan</button>')}
+    </section>
+
+    <section class="set-sec">
+      <h2>About</h2>
+      ${settingRow(`WhoUnfollowedMe ${esc(info.version)}`, '<span id="update-status">Free and open source.</span>', '<div class="btn-row"><button class="btn ghost" data-act="check-update">Check for updates</button><button class="btn ghost" data-act="open-github">GitHub</button></div>')}
+    </section>`;
+  renderSettingsUsage();
+}
+
+async function saveSetting(key, value) {
+  S.settings = await bridge.setSettings({ [key]: value });
+  refreshUsage();
+}
+
+async function changeKeepScans(n) {
+  const extra = (S.store?.snapshots.length || 0) - n;
+  if (extra > 0) {
+    const ok = await confirmBox({
+      title: `Delete ${plural(extra, 'older scan', 'older scans')} now?`,
+      body: `You have ${fmt(S.store.snapshots.length)} scans saved for this account. Keeping ${fmt(n)} deletes the ${fmt(extra)} oldest, along with the unfollower history only they show. This can't be undone.`,
+      ok: `Delete ${fmt(extra)}`,
+    });
+    if (!ok) return renderSettings();
+    S.store = await bridge.trimScans(S.key, n);
+    S.d = derive();
+    renderNav(); renderMe();
+  }
+  await saveSetting('keepScans', n);
+  toast(`Keeping the last ${fmt(n)} scans.`, 'success');
+}
+
+async function toggleSetting(key) {
+  const on = !S.settings[key];
+  if (key === 'override' && on) {
+    const ok = await confirmBox({
+      title: 'Turn on Override?',
+      body: 'Override lets you scan, unfollow and follow past the safety limits. Instagram watches for this kind of activity, and accounts that do too much can be blocked from following, temporarily restricted, or permanently banned. You use this at your own risk.',
+      ok: 'Turn on Override',
+      ack: 'I understand my Instagram account could be restricted or banned',
+    });
+    if (!ok) return;
+  }
+  await saveSetting(key, on);
+  renderSettings();
+  if (key === 'override') toast(on ? 'Override is on. Limits aren’t enforced.' : 'Override is off. Limits are back on.', on ? 'error' : 'success');
 }
 
 // ---------- boot & events ----------
@@ -784,11 +1100,55 @@ document.addEventListener('click', async (e) => {
     return renderRows(S.view);
   }
 
+  const sw = e.target.closest('[data-toggle]');
+  if (sw) return toggleSetting(sw.dataset.toggle);
+  if (e.target.closest('#bulk-stop')) { S.bulkStop = true; $('#bulk-sub').textContent = 'Stopping after this account…'; return; }
+  if (e.target.closest('#bulk-done')) return show($('#bulk'), false);
+
   const act = e.target.closest('[data-act]');
   if (!act) return;
   const id = act.closest('.row')?.dataset.id;
   switch (act.dataset.act) {
     case 'scan': return runScan();
+    case 'open-settings': return go('settings');
+    case 'bulk-unfollow': return bulkRun('destroy');
+    case 'bulk-follow': return bulkRun('create');
+    case 'bulk-star': return bulkStar();
+    case 'bulk-clear': S.sel.clear(); document.querySelectorAll('.row.selected').forEach((r) => setSelected(r.dataset.id, false)); return updateBulkBar();
+    case 'del-scan': {
+      const ts = Number(act.dataset.ts);
+      const ok = await confirmBox({ title: 'Delete this scan?', body: `The scan from ${dtFmt.format(ts)} is removed for good. Unfollowers are worked out again from the scans that are left, so some may move or disappear from Unfollowed you.`, ok: 'Delete scan' });
+      if (!ok) return;
+      S.store = await bridge.deleteScan(S.key, ts);
+      renderAll();
+      return toast('Scan deleted', 'success');
+    }
+    case 'delete-account': {
+      const p = S.store.profile || {};
+      const ok = await confirmBox({
+        title: `Delete all scans for ${p.username ? '@' + p.username : 'this account'}?`,
+        body: `This removes all ${plural(S.store.snapshots.length, 'scan', 'scans')}, the unfollower history and your starred accounts for this account from this computer. It doesn't change anything on Instagram. This can't be undone.`,
+        ok: 'Delete everything',
+      });
+      if (!ok) return;
+      await bridge.deleteAccount(S.key);
+      toast('All scans for this account were deleted.', 'success');
+      if (S.loggedIn && S.sessionUser) return openKey(S.sessionUser);
+      return backToStart();
+    }
+    case 'clear-pictures': {
+      const r = await bridge.clearPictures();
+      return toast(`Cleared ${plural(r.removed, 'saved picture', 'saved pictures')}.`, 'success');
+    }
+    case 'check-update': {
+      const el = $('#update-status');
+      el.textContent = 'Checking…';
+      const r = await bridge.checkUpdate();
+      if (!r.ok) { el.textContent = "Couldn't check right now. Try again later."; return; }
+      el.innerHTML = r.newer ? `<span class="mint">Version ${esc(r.latest)} is available.</span> Download it from GitHub.` : 'You have the latest version.';
+      return;
+    }
+    case 'open-github': return bridge.openExternal(S.appInfo?.repo || 'https://github.com/CodePraisy/WhoUnfollowedMe');
     case 'my-account': return openKey(S.sessionUser);
     case 'export': return exportCsv();
     case 'toggle-kept': S.showKept = !S.showKept; return renderListView(S.view);
@@ -826,10 +1186,35 @@ document.addEventListener('input', (e) => {
 });
 document.addEventListener('change', (e) => {
   if (e.target.id === 'sort') { S.sort = e.target.value; renderRows(S.view); }
+  if (e.target.matches('[data-sel]')) {
+    const id = e.target.closest('.row').dataset.id;
+    // Shift-click selects everything between this row and the last one you clicked
+    if (e.shiftKey && S.lastSel) {
+      const rows = [...document.querySelectorAll('#list .row')].map((r) => r.dataset.id);
+      const [a, b] = [rows.indexOf(S.lastSel), rows.indexOf(id)].sort((x, y) => x - y);
+      if (a >= 0 && b >= 0) rows.slice(a, b + 1).forEach((rid) => setSelected(rid, e.target.checked));
+    } else setSelected(id, e.target.checked);
+    S.lastSel = id;
+    updateBulkBar();
+  }
+  if (e.target.id === 'sel-all') {
+    const ids = filtered(S.view).map((u) => u.id);
+    if (e.target.checked) ids.forEach((id) => S.sel.add(id)); else ids.forEach((id) => S.sel.delete(id));
+    document.querySelectorAll('#list .row').forEach((r) => setSelected(r.dataset.id, S.sel.has(r.dataset.id)));
+    updateBulkBar();
+  }
+  const set = e.target.closest('[data-setting]');
+  if (set) {
+    const key = set.dataset.setting;
+    const n = Math.round(Number(set.value));
+    if (key === 'keepScans') changeKeepScans(n);
+    else if (Number.isFinite(n)) saveSetting(key, n).then(() => { set.value = S.settings[key]; renderSettingsUsage(); });
+  }
 });
 document.addEventListener('keydown', (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); $('#q')?.focus(); }
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'r') { e.preventDefault(); if (!$('#shell').hidden && $('#scan').hidden) runScan(); }
+  if (e.key === 'Escape' && S.sel.size && $('#modal').hidden && $('#bulk').hidden) { S.sel.clear(); document.querySelectorAll('.row.selected').forEach((r) => setSelected(r.dataset.id, false)); updateBulkBar(); }
   if (e.key === '/' && document.activeElement?.tagName !== 'INPUT') { const q = $('#q'); if (q) { e.preventDefault(); q.focus(); } }
 });
 
@@ -845,12 +1230,15 @@ window.addEventListener('error', (e) => bootFailed(e.error || e.message));
 window.addEventListener('unhandledrejection', (e) => bootFailed(e.reason));
 
 (async function boot() {
+  try { S.settings = await bridge.getSettings(); } catch { /* defaults apply in the main process */ }
+  setInterval(refreshUsage, 60000); // limits roll off over time
   const st = await bridge.status();
   S.loggedIn = st.loggedIn;
   S.sessionUser = st.loggedIn ? st.userId : null;
   S.accounts = st.accounts;
   if (st.loggedIn && st.userId) {
     await openKey(st.userId); // opens on your last results, or the "No scan yet" screen; never starts a scan by itself
+    refreshUsage();
   } else {
     showWelcome();
   }

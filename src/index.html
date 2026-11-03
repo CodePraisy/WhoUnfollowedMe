@@ -58,15 +58,9 @@
       <div class="me" id="me"></div>
       <nav id="nav" class="nav"></nav>
       <div class="side-foot">
+        <div class="usage" id="usage" hidden></div>
         <button id="btn-scan" class="btn primary block">Scan now</button>
         <p id="last-scan" class="last-scan"></p>
-        <div class="side-links">
-          <button id="btn-backup" class="link" title="Save all your scans to one file you can move to another computer">Back up scans</button>
-          <button id="btn-restore" class="link" title="Load a backup file made on this or another computer">Restore backup</button>
-          <button id="btn-import2" class="link" title="Load an Instagram data download (no login needed)">Import download</button>
-          <button id="btn-folder" class="link" title="Open the folder where scans are saved">Data folder</button>
-          <button id="btn-logout" class="link">Log out</button>
-        </div>
       </div>
     </aside>
     <section class="content">
@@ -89,12 +83,28 @@
     </div>
   </div>
 
+  <!-- Mass unfollow / follow progress -->
+  <div id="bulk" class="overlay" hidden>
+    <div class="scan-card" role="dialog" aria-modal="true" aria-labelledby="bulk-title">
+      <h2 id="bulk-title">Unfollowing</h2>
+      <div class="scan-count" id="bulk-count" aria-live="polite"></div>
+      <div class="scan-pct" id="bulk-pct"></div>
+      <div class="scan-track" role="progressbar" aria-labelledby="bulk-title" aria-valuemin="0" aria-valuemax="100" id="bulk-track">
+        <div class="scan-fill" id="bulk-fill"></div>
+      </div>
+      <p class="bulk-current" id="bulk-current"></p>
+      <p id="bulk-sub" class="muted bulk-sub"></p>
+      <button id="bulk-stop" class="btn ghost">Stop</button>
+      <button id="bulk-done" class="btn primary" hidden>Done</button>
+    </div>
+  </div>
+
   <!-- Confirm modal -->
   <div id="modal" class="overlay" hidden>
     <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title">
       <h2 id="modal-title"></h2>
       <p id="modal-body" class="muted"></p>
-      <label class="check"><input type="checkbox" id="modal-skip" /> Don't ask again this session</label>
+      <label class="check"><input type="checkbox" id="modal-skip" /> <span id="modal-skip-label">Don't ask again this session</span></label>
       <div class="modal-actions">
         <button id="modal-cancel" class="btn ghost">Cancel</button>
         <button id="modal-ok" class="btn danger"></button>

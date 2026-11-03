@@ -3,7 +3,7 @@
 // instagram.com inside its own window and then reads your lists through that
 // signed-in session, the same requests instagram.com makes when you open them.
 
-const { app, BrowserWindow, ipcMain, session, shell, dialog, Menu, protocol, nativeTheme } = require('electron');
+const { app, BrowserWindow, ipcMain, session, shell, dialog, Menu, protocol, nativeTheme, net } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
@@ -16,16 +16,15 @@ const PARTITION = 'persist:instagram';
 const IS_MAC = process.platform === 'darwin';
 const IG = 'https://www.instagram.com';
 const APP_ID = '936619743392459'; // instagram.com web client id
-const MAX_SNAPSHOTS = 60;
-const ACTION_GAP_MS = 4500;       // min gap between follow/unfollow actions
-const ACTION_HOURLY_CAP = 40;     // soft cap to avoid Instagram action blocks
+const MAX_SNAPSHOTS = 200;        // hard ceiling; the user picks how many to keep in Settings
+const MIN_ACTION_GAP_MS = 4500;   // never faster than this between follow changes, even with Override
+const REPO = 'CodePraisy/WhoUnfollowedMe';
 
 let win = null;
 let loginWin = null;
 let worker = null;
 let scanning = false;
 let cancelScan = false;
-const actionLog = [];
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const jitter = (a, b) => a + Math.random() * (b - a);
@@ -87,7 +86,8 @@ function addSnapshot(store, profile, followers, following, source) {
     following: following.map((u) => u.id),
     counts: { followers: profile.followers, following: profile.following },
   });
-  if (store.snapshots.length > MAX_SNAPSHOTS) store.snapshots.splice(0, store.snapshots.length - MAX_SNAPSHOTS);
+  const keepScans = getSettings().keepScans;
+  if (store.snapshots.length > keepScans) store.snapshots.splice(0, store.snapshots.length - keepScans);
   // drop users no snapshot references any more
   const keep = new Set(store.whitelist);
   for (const s of store.snapshots) { s.followers.forEach((id) => keep.add(id)); s.following.forEach((id) => keep.add(id)); }
@@ -449,12 +449,16 @@ async function pressProfileButton(username, want) {
 }
 
 async function friendshipAction(kind, userId, username) {
-  const now = Date.now();
-  while (actionLog.length && now - actionLog[0] > 3600000) actionLog.shift();
-  if (actionLog.length >= ACTION_HOURLY_CAP) {
-    throw new IgError('CAP', `You've made ${ACTION_HOURLY_CAP} follow changes in the last hour. Instagram may block more, so try again later.`);
+  const acct = await getCookie('ds_user_id');
+  const cfg = getSettings();
+  const u = usageSummary(acct);
+  if (!cfg.override) {
+    if (u.changesHour >= cfg.changesPerHour) throw new IgError('LIMIT', `You've reached your limit of ${cfg.changesPerHour} follow changes per hour. Try again later, or raise the limit in Settings.`);
+    if (u.changesDay >= cfg.changesPerDay) throw new IgError('LIMIT', `You've reached your limit of ${cfg.changesPerDay} follow changes for today. Try again tomorrow, or raise the limit in Settings.`);
   }
-  const gap = ACTION_GAP_MS - (now - (actionLog.at(-1) || 0));
+  // Pace like a person: the chosen delay plus a little randomness, never under 4.5 s.
+  const delay = Math.max(MIN_ACTION_GAP_MS, cfg.actionDelaySec * 1000) + jitter(0, 1500);
+  const gap = delay - (Date.now() - (u.lastChange || 0));
   if (gap > 0) await sleep(gap);
 
   const id = String(userId).replace(/\D/g, '');
@@ -476,7 +480,7 @@ async function friendshipAction(kind, userId, username) {
 
   const before = await check();
   if (done(before)) { log(`${verb}: already done`); return before; }
-  actionLog.push(Date.now());
+  recordUsage(acct, 'changes');
 
   // 1) The GraphQL mutation instagram.com's own button sends
   const t = await webTokens().catch(() => ({}));
@@ -545,6 +549,68 @@ function parseExport(dir) {
 // ---------- settings ----------
 const settingsPath = () => path.join(app.getPath('userData'), 'settings.json');
 function loadSettings() { try { return JSON.parse(fs.readFileSync(settingsPath(), 'utf8')); } catch { return {}; } }
+
+// Defaults are deliberately cautious. Instagram doesn't publish its limits, so these are
+// conservative guesses that keep normal personal use well clear of action blocks.
+const DEFAULT_SETTINGS = {
+  theme: 'system',
+  scansPerDay: 8,
+  changesPerHour: 40,
+  changesPerDay: 150,
+  actionDelaySec: 5,
+  override: false,
+  confirmUnfollow: true,
+  keepScans: 60,
+};
+const SETTING_BOUNDS = {
+  scansPerDay: [1, 50], changesPerHour: [1, 200], changesPerDay: [1, 1000], actionDelaySec: [5, 120], keepScans: [2, MAX_SNAPSHOTS],
+};
+function getSettings() {
+  const s = { ...DEFAULT_SETTINGS, ...loadSettings() };
+  for (const [k, [lo, hi]] of Object.entries(SETTING_BOUNDS)) {
+    const n = Math.round(Number(s[k]));
+    s[k] = Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : DEFAULT_SETTINGS[k];
+  }
+  s.override = s.override === true;
+  s.confirmUnfollow = s.confirmUnfollow !== false;
+  if (!['system', 'light', 'dark'].includes(s.theme)) s.theme = 'system';
+  return s;
+}
+
+// ---------- usage (what counts toward the limits) ----------
+// Timestamps per Instagram account, kept for 24 hours: every scan started, and every
+// follow/unfollow actually sent to Instagram. Stored on disk so restarting doesn't reset it.
+const usagePath = () => path.join(app.getPath('userData'), 'usage.json');
+function loadUsage() { try { return JSON.parse(fs.readFileSync(usagePath(), 'utf8')); } catch { return {}; } }
+function recordUsage(acct, kind) {
+  if (!acct) return;
+  const all = loadUsage();
+  const day = Date.now() - 86400000;
+  const a = all[acct] || { scans: [], changes: [] };
+  a.scans = (a.scans || []).filter((t) => t > day);
+  a.changes = (a.changes || []).filter((t) => t > day);
+  a[kind].push(Date.now());
+  all[acct] = a;
+  try { fs.writeFileSync(usagePath(), JSON.stringify(all)); } catch (e) { log('usage save failed', e.message); }
+}
+function usageSummary(acct) {
+  const a = (acct && loadUsage()[acct]) || { scans: [], changes: [] };
+  const now = Date.now();
+  const inLast = (arr, ms) => (arr || []).filter((t) => now - t < ms);
+  const scans = inLast(a.scans, 86400000);
+  const changes = inLast(a.changes, 86400000);
+  const hour = inLast(a.changes, 3600000);
+  return {
+    scansDay: scans.length,
+    changesDay: changes.length,
+    changesHour: hour.length,
+    lastChange: changes.at(-1) || 0,
+    // when the oldest counted item drops off, so the UI can say when room frees up
+    scansResetAt: scans.length ? scans[0] + 86400000 : null,
+    changesResetAt: changes.length ? changes[0] + 86400000 : null,
+    hourResetAt: hour.length ? hour[0] + 3600000 : null,
+  };
+}
 function saveSettings(patch) {
   const s = { ...loadSettings(), ...patch };
   fs.mkdirSync(path.dirname(settingsPath()), { recursive: true });
@@ -604,7 +670,7 @@ function iconPath() {
 }
 
 function createWindow() {
-  const theme = loadSettings().theme || 'system';
+  const theme = getSettings().theme;
   nativeTheme.themeSource = theme;
   win = new BrowserWindow({
     width: 1320, height: 860, minWidth: 1000, minHeight: 660,
@@ -645,7 +711,8 @@ async function quitNow() {
 function openExternal(url) {
   try {
     const u = new URL(url);
-    if (u.protocol === 'https:' && /(^|\.)instagram\.com$/.test(u.hostname)) shell.openExternal(url);
+    const ok = (/(^|\.)instagram\.com$/.test(u.hostname)) || (u.hostname === 'github.com' && u.pathname.toLowerCase().startsWith(`/${REPO.toLowerCase()}`));
+    if (u.protocol === 'https:' && ok) shell.openExternal(url);
   } catch { /* ignore */ }
 }
 
@@ -714,6 +781,65 @@ ipcMain.handle('data:clearHistory', (_e, key) => {
   return s;
 });
 
+// Keep only the newest `keep` scans for one account (used when the "keep" setting is lowered).
+ipcMain.handle('data:trim', (_e, key, keep) => {
+  const s = loadStore(key);
+  const n = Math.max(1, Math.round(Number(keep) || 1));
+  if (s.snapshots.length > n) s.snapshots = s.snapshots.slice(-n);
+  saveStore(s);
+  return s;
+});
+
+ipcMain.handle('data:deleteScan', (_e, key, ts) => {
+  const s = loadStore(key);
+  s.snapshots = s.snapshots.filter((x) => x.ts !== ts);
+  saveStore(s);
+  log('scan deleted');
+  return s;
+});
+
+// Removes every saved scan, starred account and cached detail for one Instagram account.
+ipcMain.handle('data:deleteAccount', (_e, key) => {
+  try { fs.unlinkSync(storePath(key)); } catch { /* already gone */ }
+  log('account data deleted');
+  return { ok: true, accounts: listAccounts() };
+});
+
+ipcMain.handle('avatars:clear', () => {
+  let n = 0;
+  try { for (const f of fs.readdirSync(avatarDir())) { fs.unlinkSync(path.join(avatarDir(), f)); n++; } } catch { /* none */ }
+  return { ok: true, removed: n };
+});
+
+ipcMain.handle('settings:get', () => getSettings());
+ipcMain.handle('settings:set', (_e, patch) => {
+  const allowed = Object.keys(DEFAULT_SETTINGS);
+  const clean = Object.fromEntries(Object.entries(patch || {}).filter(([k]) => allowed.includes(k)));
+  saveSettings(clean);
+  const s = getSettings();
+  if ('theme' in clean) { nativeTheme.themeSource = s.theme; if (win) win.setBackgroundColor(bgFor()); }
+  if ('override' in clean) log('override', s.override ? 'turned on' : 'turned off');
+  return s;
+});
+ipcMain.handle('usage:get', async () => {
+  const acct = await getCookie('ds_user_id');
+  return { ...usageSummary(acct), settings: getSettings(), account: acct };
+});
+
+ipcMain.handle('app:info', () => ({ version: app.getVersion(), repo: `https://github.com/${REPO}` }));
+ipcMain.handle('app:checkUpdate', async () => {
+  try {
+    const r = await net.fetch(`https://api.github.com/repos/${REPO}/releases/latest`, { headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'WhoUnfollowedMe' } });
+    if (!r.ok) return { ok: false };
+    const d = await r.json();
+    const latest = String(d.tag_name || '').replace(/^v/, '');
+    const cmp = (a, b) => { const x = a.split('.').map(Number); const y = b.split('.').map(Number); for (let i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) - (y[i] || 0); } return 0; };
+    return { ok: true, latest, current: app.getVersion(), newer: !!latest && cmp(latest, app.getVersion()) > 0, url: d.html_url };
+  } catch (e) {
+    return { ok: false, message: e.message };
+  }
+});
+
 ipcMain.handle('data:export', async (_e, { filename, content }) => {
   const { canceled, filePath } = await dialog.showSaveDialog(win, { defaultPath: filename });
   if (canceled || !filePath) return { ok: false };
@@ -741,7 +867,7 @@ function mergeStore(cur, inc) {
   const incNewer = newest(inc) >= newest(cur);
   const byTs = new Map();
   for (const x of [...cur.snapshots, ...inc.snapshots]) if (!byTs.has(x.ts)) byTs.set(x.ts, x);
-  const snapshots = [...byTs.values()].sort((a, b) => a.ts - b.ts).slice(-MAX_SNAPSHOTS);
+  const snapshots = [...byTs.values()].sort((a, b) => a.ts - b.ts).slice(-getSettings().keepScans);
   return {
     key: cur.key,
     profile: (incNewer ? inc.profile : cur.profile) || cur.profile || inc.profile || null,
@@ -836,10 +962,16 @@ ipcMain.handle('data:import', async () => {
 
 ipcMain.handle('ig:scan', async () => {
   if (scanning) return { ok: false, code: 'BUSY', message: 'A scan is already running.' };
+  const acct = await getCookie('ds_user_id');
+  const cfg = getSettings();
+  if (!cfg.override && usageSummary(acct).scansDay >= cfg.scansPerDay) {
+    return { ok: false, code: 'LIMIT', message: `You've used all ${cfg.scansPerDay} scans for today. Try again tomorrow, or raise the limit in Settings.` };
+  }
   scanning = true;
   cancelScan = false;
   try {
-    log('scan started');
+    log('scan started', cfg.override ? '(override on)' : '');
+    recordUsage(acct, 'scans');
     const profile = await fetchProfile((p) => send('scan:progress', p));
     const last = loadStore(profile.id).snapshots.at(-1);
     const totals = {
