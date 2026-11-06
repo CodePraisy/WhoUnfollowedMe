@@ -1,7 +1,7 @@
 {
   "name": "who-unfollowed-me",
   "productName": "WhoUnfollowedMe",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "See who doesn't follow you back on Instagram and track unfollowers over time.",
   "main": "main.js",
   "author": "Praise Onuoha",
@@ -51,10 +51,10 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "shortcutName": "WhoUnfollowedMe",
-      "artifactName": "WhoUnfollowedMe-Setup-${version}.exe"
+      "artifactName": "WhoUnfollowedMe-Setup.exe"
     },
     "portable": {
-      "artifactName": "WhoUnfollowedMe-Portable-${version}.exe"
+      "artifactName": "WhoUnfollowedMe-Portable.exe"
     },
     "mac": {
       "target": [
@@ -72,7 +72,7 @@
       "hardenedRuntime": false
     },
     "dmg": {
-      "artifactName": "WhoUnfollowedMe-${version}-mac-${arch}.dmg",
+      "artifactName": "WhoUnfollowedMe-mac-${arch}.dmg",
       "title": "WhoUnfollowedMe ${version}"
     }
   },

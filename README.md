@@ -1,73 +1,101 @@
 # WhoUnfollowedMe
 
-A desktop app for Windows and Mac that shows who doesn't follow you back on Instagram and tracks who unfollows you over time.
+See who doesn't follow you back on Instagram, who unfollowed you, and clean up your following list, all from a desktop app on Windows or Mac.
 
 ## Download
 
-Get the latest build from the [Releases page](https://github.com/CodePraisy/WhoUnfollowedMe/releases).
+| | |
+|---|---|
+| **Windows** (10/11) | [⬇ Download installer](https://github.com/CodePraisy/WhoUnfollowedMe/releases/latest/download/WhoUnfollowedMe-Setup.exe) · [no-install version](https://github.com/CodePraisy/WhoUnfollowedMe/releases/latest/download/WhoUnfollowedMe-Portable.exe) |
+| **Mac** with Apple chip (M1 or newer) | [⬇ Download for Apple Silicon](https://github.com/CodePraisy/WhoUnfollowedMe/releases/latest/download/WhoUnfollowedMe-mac-arm64.dmg) |
+| **Mac** with Intel chip | [⬇ Download for Intel](https://github.com/CodePraisy/WhoUnfollowedMe/releases/latest/download/WhoUnfollowedMe-mac-x64.dmg) |
 
-**Windows 10/11 (64-bit)**
-- `WhoUnfollowedMe-Setup-x.y.z.exe` installs it with Start menu and desktop shortcuts.
-- `WhoUnfollowedMe-Portable-x.y.z.exe` runs without installing.
+Not sure which Mac you have? Apple menu → **About This Mac**: "Chip: Apple M…" means Apple chip.
 
-The builds aren't code-signed, so Windows SmartScreen may warn the first time: choose **More info → Run anyway**.
+### Installing
 
-**Mac (macOS 11 or newer)**
-- Apple Silicon (M1 and later): `WhoUnfollowedMe-x.y.z-mac-arm64.dmg`
-- Intel: `WhoUnfollowedMe-x.y.z-mac-x64.dmg`
+**Windows:** open the installer. If Windows shows "Windows protected your PC", click **More info → Run anyway**. (The app isn't paid-signed yet, so Windows doesn't recognize it.)
 
-Open the .dmg and drag WhoUnfollowedMe into Applications. The app isn't notarized by Apple, so the first time macOS will say it can't verify the developer. Open **System Settings → Privacy & Security**, scroll down, and click **Open Anyway** next to WhoUnfollowedMe (you only do this once).
+**Mac:** open the .dmg and drag WhoUnfollowedMe into Applications. The first time you open it, macOS blocks it; go to **System Settings → Privacy & Security**, scroll down and click **Open Anyway**. You only do this once.
 
-## Run from source
+## How to use it
 
-1. Install Node.js 22 or newer from https://nodejs.org.
-2. Windows: double-click `start.bat`. Mac or Windows terminal: `npm install`, then `npm start`.
+1. Click **Log in with Instagram** and sign in on Instagram's own page. Your password goes to Instagram, never to the app.
+2. Click **Scan now**. It reads your followers and who you follow (about a minute per thousand accounts).
+3. Look through the results:
+   - **Don't follow back**: people you follow who don't follow you
+   - **Unfollowed you**: who left since your last scan (from your second scan on)
+   - **New followers**, **Mutuals**, and people **you** don't follow back
+4. Unfollow or follow back one at a time, or tick several and do them all at once.
 
-The only dependency is Electron, and `npm install` reports 0 vulnerabilities.
-
-## Build it yourself
-
-- `npm run dist` builds for the computer you're on (Windows: installer + portable exe; Mac: .dmg files). Output lands in `dist/`.
-- Or let GitHub build both: bump `"version"` in `package.json` and push to `main`. The workflow builds Windows and Mac and publishes one release with all the files, in about 10 minutes.
-
-## How it works
-
-Instagram has no public API for follower lists, so the app opens instagram.com's real login page in its own window. You log in there (2FA works as normal), and the app then reads your followers and following through that signed-in session, the same requests instagram.com makes when you open those lists. Your password never touches the app.
-
-Scans are paced like a person scrolling: 1–2.5 s between pages and a longer pause every 12 pages. If Instagram says to slow down, the app waits and resumes on its own. Expect about a minute per thousand accounts.
+Scan every few days to catch new unfollowers. Everything is saved on your computer only.
 
 ## Features
 
-- **Overview**: a diagram of followers vs. following. Click any region to open that list.
-- **Don't follow back**: everyone you follow who doesn't follow you. Star accounts you're fine with (celebrities, brands) to hide them.
-- **Unfollowed you**: each scan is saved and compared with the one before, so from the second scan on you see exactly who left and when, plus whether you still follow them.
-- **New followers**, **Fans** (you don't follow back), **Mutuals**, full **Followers** / **Following** lists.
-- **Scan history** with a follower trend chart.
-- Profile pictures for every account, saved on your computer so they keep showing after Instagram's picture links expire.
-- Light, dark, or match-Windows theme (switch in the top bar).
-- Search (Ctrl+K), filters for verified and private accounts, sorting, and CSV export.
-- Unfollow or follow back from inside the app. Every change is confirmed with Instagram before the app shows it as done.
-- **Mass unfollow / follow back**: tick accounts (or **Select all**, Shift-click for a range), then unfollow or follow them in one go. They're done one at a time with a pause between each, with a progress bar and a Stop button.
-- **Usage limits**: rings in the sidebar show scans and unfollows/follows in the last 24 hours, green under half the limit, yellow from half, red near it. Defaults are 8 scans a day and 150 follow changes a day (40 an hour), at least 5 seconds apart; you can change them in Settings. **Override** lets you go past the limits, after a warning that Instagram may restrict or ban accounts that do too much.
-- **Settings**: limits and Override, ask-before-unfollow, theme, how many scans to keep, delete single scans or all of an account's scans, backups, clear saved pictures, log out, and an update check.
-- **Back up / restore**: save every scan, starred account and profile picture to one `.wumbackup` file and restore it on another computer. Restoring merges with what's already there and never duplicates scans. Your Instagram login is not included.
-- **Data download mode**: no login needed. In Instagram go to Accounts Center → Your information and permissions → Download your information, pick **JSON** format and "Followers and following", unzip it, then choose that folder in the app.
+- Diagram of followers vs. following; click a section to see those accounts
+- Unfollower history and a follower trend chart across scans
+- Mass unfollow / follow back with a progress bar and Stop button
+- Star accounts (celebrities, brands) to hide them from "Don't follow back"
+- Safety limits with green / yellow / red usage rings, plus an **Override** setting (with a warning)
+- Search, filters, sorting and spreadsheet (CSV) export
+- Light, dark or match-system theme
+- Back up your scans and restore them on another computer
+- Works without logging in using Instagram's own data download
 
-## Where data lives
+## Staying safe
 
-Everything stays on your computer, in `%APPDATA%\WhoUnfollowedMe\` on Windows or `~/Library/Application Support/WhoUnfollowedMe/` on Mac (the **Data folder** button opens it):
+Instagram limits how much an account can scan, follow and unfollow, and doesn't say what the limits are. The app keeps you under cautious defaults: 8 scans a day, 150 follow changes a day (40 an hour), at least 5 seconds apart. You can change them in **Settings**. Going past them with **Override** risks Instagram restricting or banning your account.
 
-- `accounts\` – your scans, one file per Instagram account
-- `avatars\` – cached profile pictures
-- `Partitions\instagram\` – your Instagram login session
-- `settings.json` – your settings (theme, limits, Override)
-- `usage.json` – when you scanned and unfollowed in the last 24 hours, for the limits
-- `debug.log` – request status codes and errors for troubleshooting (no follower data or login details)
+Using automated tools is against Instagram's terms. Use this on your own account, at a normal pace, at your own risk.
 
-Nothing is sent anywhere except instagram.com.
+## Privacy
 
-## Notes
+- Nothing is sent anywhere except instagram.com.
+- Your scans, settings and login stay on your computer:
+  - Windows: `%APPDATA%\WhoUnfollowedMe\`
+  - Mac: `~/Library/Application Support/WhoUnfollowedMe/`
+- Backups don't include your login.
 
-- Accounts loaded from a data download show initials instead of photos, because the download doesn't include pictures.
-- This uses Instagram's private web endpoints. They can change without notice; if scanning breaks, data download mode still works.
-- Automated access is against Instagram's terms. Scanning your own lists at this pace is low-risk, but don't run scans back to back or unfollow hundreds of accounts in a day.
+## Without logging in
+
+In Instagram go to **Accounts Center → Your information and permissions → Download your information**, choose **Followers and following** in **JSON** format, unzip the download, and in the app choose **Settings → Import**. Accounts from a download show initials instead of photos.
+
+---
+
+## For developers
+
+### Run from source
+
+Requires Node.js 22+.
+
+```
+npm install
+npm start
+```
+
+On Windows you can also double-click `start.bat`.
+
+### Build
+
+- `npm run dist` builds for the current OS into `dist/` (Windows: installer + portable exe; Mac: .dmg for arm64 and x64).
+- Releases are built by GitHub Actions: bump `"version"` in `package.json` and push to `main`. The workflow builds Windows and macOS in parallel and publishes one release. File names have no version number, so the download links above always point to the newest release.
+
+### How it works
+
+Instagram has no public API for follower lists. The app opens instagram.com's login page in its own window, then calls the same internal web endpoints instagram.com uses, from a hidden same-origin page so the session cookies apply:
+
+- Lists: `friendships/{id}/followers|following` (GraphQL query fallback), paged with 1–2.5 s pauses and a longer pause every 12 pages; 429s back off and retry.
+- Unfollow / follow: Instagram's current GraphQL mutations with the page's session tokens, falling back to pressing the real button on the profile page; every change is confirmed with `friendships/show` before it's reported.
+- Profile pictures load through a custom `igimg://` protocol and are cached on disk.
+
+### Data files
+
+In the data folder: `accounts/` (scans, one file per account ID), `avatars/` (picture cache), `Partitions/instagram/` (login session), `settings.json`, `usage.json` (last 24 h of scans and follow changes, for the limits), `debug.log` (request status codes only, no follower data).
+
+### Stack
+
+Electron 45, plain HTML/CSS/JS (no framework), electron-builder. Only dependency: Electron (`npm install` reports 0 vulnerabilities).
+
+## License
+
+MIT © 2026 Praise Onuoha
