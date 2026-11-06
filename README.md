@@ -1,22 +1,30 @@
 # WhoUnfollowedMe
 
+[![Latest release](https://img.shields.io/github/v/release/CodePraisy/WhoUnfollowedMe?label=release)](https://github.com/CodePraisy/WhoUnfollowedMe/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/CodePraisy/WhoUnfollowedMe/total)](https://github.com/CodePraisy/WhoUnfollowedMe/releases)
+![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20macOS-lightgrey)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+
 See who doesn't follow you back on Instagram, who unfollowed you, and clean up your following list, all from a desktop app on Windows or Mac.
 
 ## Download
 
-| | |
-|---|---|
-| **Windows** (10/11) | [⬇ Download installer](https://github.com/CodePraisy/WhoUnfollowedMe/releases/latest/download/WhoUnfollowedMe-Setup.exe) · [no-install version](https://github.com/CodePraisy/WhoUnfollowedMe/releases/latest/download/WhoUnfollowedMe-Portable.exe) |
-| **Mac** with Apple chip (M1 or newer) | [⬇ Download for Apple Silicon](https://github.com/CodePraisy/WhoUnfollowedMe/releases/latest/download/WhoUnfollowedMe-mac-arm64.dmg) |
-| **Mac** with Intel chip | [⬇ Download for Intel](https://github.com/CodePraisy/WhoUnfollowedMe/releases/latest/download/WhoUnfollowedMe-mac-x64.dmg) |
+Links always point to the newest release. Older versions: [all releases](https://github.com/CodePraisy/WhoUnfollowedMe/releases).
 
-Not sure which Mac you have? Apple menu → **About This Mac**: "Chip: Apple M…" means Apple chip.
+| File | Platform | Requirements |
+|---|---|---|
+| [`WhoUnfollowedMe-Setup.exe`](https://github.com/CodePraisy/WhoUnfollowedMe/releases/latest/download/WhoUnfollowedMe-Setup.exe) | (Windows installer) | Windows 10/11, x64 |
+| [`WhoUnfollowedMe-Portable.exe`](https://github.com/CodePraisy/WhoUnfollowedMe/releases/latest/download/WhoUnfollowedMe-Portable.exe) | (Windows portable, no install) | Windows 10/11, x64 |
+| [`WhoUnfollowedMe-mac-arm64.dmg`](https://github.com/CodePraisy/WhoUnfollowedMe/releases/latest/download/WhoUnfollowedMe-mac-arm64.dmg) | (Mac, Apple Silicon: M1 and newer) | macOS 11+ |
+| [`WhoUnfollowedMe-mac-x64.dmg`](https://github.com/CodePraisy/WhoUnfollowedMe/releases/latest/download/WhoUnfollowedMe-mac-x64.dmg) | (Mac, Intel) | macOS 11+ |
+
+To check which Mac you have: Apple menu → **About This Mac**. "Chip: Apple M…" means Apple Silicon.
 
 ### Installing
 
-**Windows:** open the installer. If Windows shows "Windows protected your PC", click **More info → Run anyway**. (The app isn't paid-signed yet, so Windows doesn't recognize it.)
+**Windows:** open the installer. If Windows shows "Windows protected your PC", click **More info → Run anyway**. (The builds aren't code-signed, so SmartScreen doesn't recognize the publisher yet.)
 
-**Mac:** open the .dmg and drag WhoUnfollowedMe into Applications. The first time you open it, macOS blocks it; go to **System Settings → Privacy & Security**, scroll down and click **Open Anyway**. You only do this once.
+**Mac:** open the .dmg and drag WhoUnfollowedMe into Applications. The app is ad-hoc signed but not notarized, so Gatekeeper blocks the first launch; go to **System Settings → Privacy & Security**, scroll down and click **Open Anyway**. You only do this once.
 
 ## How to use it
 
